@@ -12,6 +12,16 @@ class Config:
     FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "dev-key-change-me")
     DATABASE_PATH = os.getenv("DATABASE_PATH", os.path.join(_dir, "rent_scraper.db"))
 
+    # Bot configuration
+    BOT_ENABLED = os.getenv("BOT_ENABLED", "true").lower() == "true"
+    BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID", os.getenv("TELEGRAM_CHAT_ID", "0")))
+    BOT_MODE = os.getenv("BOT_MODE", "polling")  # polling or webhook
+    BOT_WEBHOOK_URL = os.getenv("BOT_WEBHOOK_URL")
+
+    # Conversation settings
+    CONVERSATION_HISTORY_LIMIT = 10
+    MAX_LISTINGS_PER_MESSAGE = 5
+
 
 DEFAULT_SEARCH_SETTINGS = {
     "location_identifier": "REGION%5E87490",

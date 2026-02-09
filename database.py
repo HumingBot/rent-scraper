@@ -72,6 +72,37 @@ CREATE INDEX IF NOT EXISTS idx_listings_rightmove_id ON listings(rightmove_id);
 CREATE INDEX IF NOT EXISTS idx_listings_price ON listings(price_numeric);
 CREATE INDEX IF NOT EXISTS idx_listings_first_seen ON listings(first_seen_at);
 CREATE INDEX IF NOT EXISTS idx_run_listings_run ON run_listings(run_id);
+
+CREATE TABLE IF NOT EXISTS conversation_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    message TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    analysis_id INTEGER,
+    FOREIGN KEY (analysis_id) REFERENCES analyses(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_context (
+    telegram_id INTEGER PRIMARY KEY,
+    last_active_at TEXT NOT NULL,
+    current_focus TEXT,
+    focus_data TEXT,
+    preferences TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_listing_views (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id INTEGER NOT NULL,
+    listing_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    shown_at TEXT NOT NULL,
+    conversation_context TEXT,
+    FOREIGN KEY (listing_id) REFERENCES listings(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_telegram ON conversation_history(telegram_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_user_listing_views ON user_listing_views(telegram_id, shown_at);
 """
 
 
@@ -319,3 +350,113 @@ def get_latest_analysis():
             result["ranked_listings"] = json.loads(result["ranked_listings"]) if result["ranked_listings"] else []
             return result
         return None
+
+
+# Bot-related database functions
+
+def save_conversation_turn(telegram_id, role, message, analysis_id=None):
+    """Save a conversation turn for context"""
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO conversation_history (telegram_id, role, message, timestamp, analysis_id) VALUES (?, ?, ?, ?, ?)",
+            (telegram_id, role, message, _now(), analysis_id)
+        )
+
+
+def get_conversation_history(telegram_id, limit=10):
+    """Get recent conversation history"""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM conversation_history WHERE telegram_id = ? ORDER BY timestamp DESC LIMIT ?",
+            (telegram_id, limit)
+        ).fetchall()
+        return [dict(row) for row in reversed(rows)]  # Return in chronological order
+
+
+def get_user_context(telegram_id):
+    """Get current user context and preferences"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM user_context WHERE telegram_id = ?",
+            (telegram_id,)
+        ).fetchone()
+        if row:
+            result = dict(row)
+            if result.get("preferences"):
+                result["preferences"] = json.loads(result["preferences"])
+            if result.get("focus_data"):
+                result["focus_data"] = json.loads(result["focus_data"])
+            return result
+        return None
+
+
+def update_user_context(telegram_id, focus, focus_data):
+    """Update what the user is currently discussing"""
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO user_context (telegram_id, last_active_at, current_focus, focus_data)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(telegram_id) DO UPDATE SET
+                   last_active_at = excluded.last_active_at,
+                   current_focus = excluded.current_focus,
+                   focus_data = excluded.focus_data""",
+            (telegram_id, _now(), focus, json.dumps(focus_data))
+        )
+
+
+def mark_listing_shown(telegram_id, listing_id, position, context):
+    """Track that a listing was shown to user with its reference number"""
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO user_listing_views (telegram_id, listing_id, position, shown_at, conversation_context) VALUES (?, ?, ?, ?, ?)",
+            (telegram_id, listing_id, position, _now(), context)
+        )
+
+
+def get_recently_shown_listings(telegram_id, hours=24):
+    """Get listings shown to user recently for follow-ups (today only by default)"""
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT ulv.*, l.display_address, l.price_numeric, l.url
+               FROM user_listing_views ulv
+               JOIN listings l ON ulv.listing_id = l.id
+               WHERE ulv.telegram_id = ?
+               AND datetime(ulv.shown_at) >= datetime('now', '-' || ? || ' hours')
+               ORDER BY ulv.shown_at DESC""",
+            (telegram_id, hours)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_listing_by_reference(telegram_id, position, hours=24):
+    """Get a specific listing by its reference number (e.g., 'the second one' = position 2)"""
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT ulv.*, l.*
+               FROM user_listing_views ulv
+               JOIN listings l ON ulv.listing_id = l.id
+               WHERE ulv.telegram_id = ?
+               AND ulv.position = ?
+               AND datetime(ulv.shown_at) >= datetime('now', '-' || ? || ' hours')
+               ORDER BY ulv.shown_at DESC
+               LIMIT 1""",
+            (telegram_id, position, hours)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def clear_old_conversation_history(telegram_id, days=1):
+    """Clear conversation history older than N days (default: daily reset)"""
+    with get_db() as conn:
+        conn.execute(
+            """DELETE FROM conversation_history
+               WHERE telegram_id = ?
+               AND datetime(timestamp) < datetime('now', '-' || ? || ' days')""",
+            (telegram_id, days)
+        )
+        conn.execute(
+            """DELETE FROM user_listing_views
+               WHERE telegram_id = ?
+               AND datetime(shown_at) < datetime('now', '-' || ? || ' days')""",
+            (telegram_id, days)
+        )
