@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Scrape Runs - Rent Scraper{% endblock %}
+
+{% block content %}
+<h2>Scrape Runs</h2>
+
+{% if runs %}
+<div class="table-wrapper">
+    <table class="striped">
+        <thead>
+            <tr>
+                <th>Run #</th>
+                <th>Started</th>
+                <th>Status</th>
+                <th>Found</th>
+                <th>New</th>
+                <th>Analysis</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for run in runs %}
+            <tr>
+                <td>{{ run.id }}</td>
+                <td>{{ run.started_at[:19] if run.started_at else '-' }}</td>
+                <td>
+                    <span class="status-{{ run.status }}">{{ run.status }}</span>
+                    {% if run.error_message %}
+                        <br><small class="error-text">{{ run.error_message[:100] }}</small>
+                    {% endif %}
+                </td>
+                <td>{{ run.total_found }}</td>
+                <td>{{ run.new_listings }}</td>
+                <td><a href="{{ url_for('analysis_page', run_id=run.id) }}">View</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p>No scrape runs yet. Go to the <a href="{{ url_for('dashboard') }}">dashboard</a> to trigger one.</p>
+{% endif %}
+{% endblock %}

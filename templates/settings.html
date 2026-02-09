@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Settings - Rent Scraper{% endblock %}
+
+{% block content %}
+<h2>Search Settings</h2>
+
+<form method="POST" action="{{ url_for('save_settings') }}">
+    <fieldset>
+        <legend>Location</legend>
+        <div class="grid">
+            <label>
+                Location Name
+                <input type="text" name="location_display_name" value="{{ settings.get('location_display_name', 'London') }}" required>
+            </label>
+            <label>
+                Location Identifier
+                <input type="text" name="location_identifier" value="{{ settings.get('location_identifier', 'REGION%5E87490') }}" required>
+                <small>Rightmove location ID (e.g. REGION%5E87490 for London)</small>
+            </label>
+        </div>
+        <label>
+            Search Radius (miles)
+            <input type="number" name="radius" value="{{ settings.get('radius', 3.0) }}" step="0.5" min="0" max="40" required>
+        </label>
+    </fieldset>
+
+    <fieldset>
+        <legend>Price Range</legend>
+        <div class="grid">
+            <label>
+                Min Price (pcm)
+                <input type="number" name="min_price" value="{{ settings.get('min_price', 1300) }}" step="50" min="0" required>
+            </label>
+            <label>
+                Max Price (pcm)
+                <input type="number" name="max_price" value="{{ settings.get('max_price', 1750) }}" step="50" min="0" required>
+            </label>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Property Details</legend>
+        <div class="grid">
+            <label>
+                Min Bedrooms
+                <input type="number" name="min_bedrooms" value="{{ settings.get('min_bedrooms', 1) }}" min="0" max="10" required>
+            </label>
+            <label>
+                Max Bedrooms
+                <input type="number" name="max_bedrooms" value="{{ settings.get('max_bedrooms', 1) }}" min="0" max="10" required>
+            </label>
+        </div>
+        <label>
+            Property Type
+            <select name="property_type">
+                {% set pt = settings.get('property_type', 'flat') %}
+                <option value="flat" {% if pt == 'flat' %}selected{% endif %}>Flat</option>
+                <option value="house" {% if pt == 'house' %}selected{% endif %}>House</option>
+                <option value="bungalow" {% if pt == 'bungalow' %}selected{% endif %}>Bungalow</option>
+                <option value="studio" {% if pt == 'studio' %}selected{% endif %}>Studio</option>
+            </select>
+        </label>
+        <label>
+            Max Days Since Added
+            <input type="number" name="max_days_since_added" value="{{ settings.get('max_days_since_added', 1) }}" min="1" max="14" required>
+        </label>
+        <label>
+            <input type="checkbox" name="include_let_agreed" {% if settings.get('include_let_agreed', True) %}checked{% endif %}>
+            Include Let Agreed properties
+        </label>
+    </fieldset>
+
+    <fieldset>
+        <legend>Scheduler</legend>
+        <label>
+            <input type="checkbox" name="scheduler_enabled" {% if settings.get('scheduler_enabled', True) %}checked{% endif %}>
+            Enable daily scheduled scrape
+        </label>
+        <div class="grid">
+            <label>
+                Hour (0-23)
+                <input type="number" name="scheduler_hour" value="{{ settings.get('scheduler_hour', 5) }}" min="0" max="23" required>
+            </label>
+            <label>
+                Minute (0-59)
+                <input type="number" name="scheduler_minute" value="{{ settings.get('scheduler_minute', 0) }}" min="0" max="59" required>
+            </label>
+        </div>
+        {% if next_run %}
+            <small>Next scheduled run: <strong>{{ next_run }}</strong></small>
+        {% else %}
+            <small>Scheduler is currently disabled.</small>
+        {% endif %}
+    </fieldset>
+
+    <button type="submit">Save Settings</button>
+</form>
+{% endblock %}

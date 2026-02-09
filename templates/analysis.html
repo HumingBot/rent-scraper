@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Analysis - Run #{{ run_id }}{% endblock %}
+
+{% block content %}
+<h2>Analysis for Run #{{ run_id }}</h2>
+
+{% if analysis %}
+    <article>
+        <header>
+            <strong>Summary</strong>
+            <small>Model: {{ analysis.model_used }} | Tokens: {{ analysis.tokens_used }}</small>
+        </header>
+        {% set parsed = analysis.ranked_listings %}
+
+        {% if analysis.raw_response %}
+            {% set summary = namespace(text='') %}
+            {% for ranking in parsed %}
+                {% if loop.first %}{% endif %}
+            {% endfor %}
+        {% endif %}
+
+        <p>{{ analysis.raw_response[:500] if not parsed else '' }}</p>
+    </article>
+
+    {% if parsed %}
+    <h3>Top Rankings</h3>
+    {% for r in parsed|sort(attribute='rank') %}
+        {% set rid = r.rightmove_id|string %}
+        {% set listing = listings_map.get(rid, {}) %}
+        <article class="ranking-card rank-{{ r.rank }}">
+            <header>
+                <span class="rank-badge">#{{ r.rank }}</span>
+                <strong>{{ r.get('price', listing.get('display_price', 'N/A')) }} - {{ r.get('address', listing.get('display_address', 'Unknown')) }}</strong>
+            </header>
+            <p>{{ r.reasoning }}</p>
+            {% if listing %}
+                <div class="listing-details">
+                    <small>
+                        {{ listing.get('bedrooms', '?') }} bed |
+                        {{ listing.get('bathrooms', '?') }} bath |
+                        {{ listing.get('property_sub_type', '') }} |
+                        {{ listing.get('furnish_type', '') }}
+                    </small>
+                </div>
+            {% endif %}
+            <footer>
+                <a href="https://www.rightmove.co.uk/properties/{{ rid }}" target="_blank" rel="noopener">View on Rightmove</a>
+            </footer>
+        </article>
+    {% endfor %}
+    {% endif %}
+
+    <h3>All Listings in This Run ({{ listings|length }})</h3>
+    {% if listings %}
+    <div class="table-wrapper">
+        <table class="striped">
+            <thead>
+                <tr>
+                    <th>New</th>
+                    <th>Price</th>
+                    <th>Address</th>
+                    <th>Beds</th>
+                    <th>Type</th>
+                    <th>Link</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for listing in listings %}
+                <tr>
+                    <td>{% if listing.is_new %}*{% endif %}</td>
+                    <td>{{ listing.display_price or 'N/A' }}</td>
+                    <td>{{ listing.display_address or 'N/A' }}</td>
+                    <td>{{ listing.bedrooms if listing.bedrooms is not none else '-' }}</td>
+                    <td>{{ listing.property_sub_type or '-' }}</td>
+                    <td><a href="{{ listing.url }}" target="_blank" rel="noopener">View</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <details>
+        <summary>Raw Claude Response</summary>
+        <pre><code>{{ analysis.raw_response }}</code></pre>
+    </details>
+
+{% else %}
+    <p>No analysis found for this run. The analysis may have failed or hasn't been run yet.</p>
+{% endif %}
+
+<a href="{{ url_for('runs_page') }}" role="button" class="outline">Back to Runs</a>
+{% endblock %}
